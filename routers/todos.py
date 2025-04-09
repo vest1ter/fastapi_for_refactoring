@@ -4,7 +4,7 @@ sys.path.append("..")
 from starlette import status
 from starlette.responses import RedirectResponse
 from fastapi import Depends, HTTPException, APIRouter, Request, Form
-import models
+import models.models as models
 from typing import Optional
 from database import engine, SessionLocal
 from sqlalchemy.orm import Session
@@ -13,6 +13,10 @@ from .auth import get_current_user
 
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+
+
+from schemas.todo_schemas import Todo
+from database_func.db_functions import get_db
 
 router = APIRouter(
     prefix="/todos",
@@ -24,26 +28,6 @@ models.Base.metadata.create_all(bind=engine)
 
 templates = Jinja2Templates(directory="templates")
 
-
-"""
-# crear la base de datos inicial
-@app.get("/")
-async def create_datebase():
-    return {"Datatebase": "Created"}
-"""
-
-def get_db():
-    try:
-        db = SessionLocal()
-        yield db
-    finally:
-        db.close()
-
-class Todo(BaseModel):
-    title: str
-    description: Optional[str]
-    priority: int = Field(gt=0, lt=6, description="The priority must be between 1-5")
-    complete: bool
 
 @router.get("/", response_class=HTMLResponse)
 async def read_all_by_user(request: Request, db: Session = Depends(get_db)):
@@ -129,7 +113,7 @@ async def delete_todo(request: Request, todo_id: int, db: Session = Depends(get_
 
 # obtener todos los todos
 @router.get("/")
-async def read_all(db: Session = Depends(get_db)):
+async def read_all(request: Request, db: Session = Depends(get_db)):
     user = await get_current_user(request)
     if user is None:
         return RedirectResponse(url="/auth", status_code=status.HTTP_302_FOUND)
@@ -138,19 +122,19 @@ async def read_all(db: Session = Depends(get_db)):
 
 
 @router.get("/user")
-async def read_all_by_user(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+async def read_all_by_user(request: Request, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     user = await get_current_user(request)
     if user is None:
         return RedirectResponse(url="/auth", status_code=status.HTTP_302_FOUND)
 
     if user is None:
-        raise get_user_exception()
+        raise HTTPException(status_code=404, detail="user not found")
     return db.query(models.Todos).filter(models.Todos.owner_id == user.get("id"))
 
 
 # obtener todo por id
 @router.get("/{todo_id}")
-async def read_todo(todo_id: int, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+async def read_todo(todo_id: int, request: Request,  db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     user = await get_current_user(request)
     if user is None:
         return RedirectResponse(url="/auth", status_code=status.HTTP_302_FOUND)
@@ -161,7 +145,7 @@ async def read_todo(todo_id: int, db: Session = Depends(get_db), user: dict = De
     raise http_exception()
 
 @router.post("/")
-async def create_todo(todo: Todo, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+async def create_todo(todo: Todo, request: Request, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     user = await get_current_user(request)
 
     if user is None:
@@ -180,7 +164,7 @@ async def create_todo(todo: Todo, db: Session = Depends(get_db), user: dict = De
     return successful_response(201)
 
 @router.put("/{todo_id}")
-async def update_todo(todo_id: int, todo: Todo, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+async def update_todo(todo_id: int, todo: Todo, request: Request,  db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
 
     user = await get_current_user(request)
     if user is None:
@@ -202,7 +186,7 @@ async def update_todo(todo_id: int, todo: Todo, db: Session = Depends(get_db), u
     return successful_response(200)
 
 @router.delete("/{todo_id}")
-async def delete_todo(todo_id: int, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+async def delete_todo(todo_id: int, request: Request, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     
     user = await get_current_user(request)
     if user is None:

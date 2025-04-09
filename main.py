@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Depends
-import models
+import models.models as models
 from database import engine
 from routers import auth, todos
 from starlette.staticfiles import StaticFiles
